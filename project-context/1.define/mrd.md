@@ -26,10 +26,10 @@ The weekly status process spans four distinct domains - progress rollup, financi
 - Preserve human authority on the high-stakes step via a hard approval gate.
 
 ### 6. Success metrics
-- Time-to-draft readout reduced by a target margin versus the manual baseline.
-- Percentage of output figures traceable to a source row: 100%.
-- Human acceptance rate of the draft with only minor edits.
-- Zero unapproved outputs treated as final (the HITL gate never bypassed).
+- Time-to-draft readout: a single run completes in minutes versus the hours a manual weekly cycle takes (§1); the exact target margin and the manual baseline are set per Open Questions.
+- Output figures traceable to a source row: 100% (every RAG status, capacity signal, and risk cites a source row).
+- First-run acceptance: the program manager accepts the draft with only minor edits, measured as accepted runs / total runs; the edit-volume threshold that counts as "minor" is set per Open Questions.
+- HITL integrity: zero unapproved outputs treated as final, measured as unapproved-final incidents = 0 across all runs (the approval gate is never bypassed).
 
 ### 7. Constraints and assumptions
 - Course/exploration context: operates on **synthetic program data only** - no client-confidential or production inputs.
@@ -59,3 +59,4 @@ The weekly status process spans four distinct domains - progress rollup, financi
 - Created 2026-08-08 by Melanie Arias. Status: DRAFT for course Define phase.
 - Product target runtime: AAMAD_TARGET_RUNTIME=claude-agent-sdk (recorded in the SAD Audit).
 - Data posture: synthetic only.
+- 2026-08-08, @product.mgr, define-phase-quality-pass: made success metrics (§6) measurable and outcome-oriented (time-to-draft, 100% traceability, first-run acceptance rate, HITL integrity = 0 incidents), grounding targets in §1 and deferring exact thresholds to Open Questions. No scope invented.
