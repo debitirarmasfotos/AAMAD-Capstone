@@ -5,7 +5,8 @@
 version: 1
 
 runtime:
-  target: crewai
+  # This capstone targets the Claude Agent SDK runtime (see project-context/1.define/sad.md).
+  target: claude-agent-sdk
 
 language:
   primary: python
