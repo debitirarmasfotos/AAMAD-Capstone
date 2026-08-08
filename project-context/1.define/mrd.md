@@ -39,3 +39,23 @@ The weekly status process spans four distinct domains - progress rollup, financi
 ### 8. Risks
 - Over-scoping toward live integrations dilutes the MVP; scope held to one dataset and one readout.
 - Trust risk if provenance is weak; mitigated by making traceability a hard requirement.
+
+## Sources
+- Course lesson material (AAMAD, Multiagent Systems, runtime selection) for framework and pattern context.
+- Author's program-management domain experience, used to frame the problem and personas.
+- Note: all figures and scenarios are illustrative/synthetic; no client or production data.
+
+## Assumptions
+- The program runs a weekly executive cadence with a single owning program manager.
+- One primary program in scope for the MVP (no portfolio rollup).
+- Source data is available through a stable ingestion interface; the MVP uses a synthetic file.
+
+## Open Questions
+- What is the manual-baseline time to beat, and how will time-savings be measured?
+- Which live connector (Slack risk feed vs project-management API) is the first post-MVP integration?
+- What acceptance threshold counts as "accepted with minor edits" for the success metric?
+
+## Audit
+- Created 2026-08-08 by Melanie Arias. Status: DRAFT for course Define phase.
+- Product target runtime: AAMAD_TARGET_RUNTIME=claude-agent-sdk (recorded in the SAD Audit).
+- Data posture: synthetic only.

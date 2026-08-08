@@ -13,8 +13,8 @@ with a mandatory human approval gate (HITL) before any output is treated as fina
 - **Coordination:** hybrid - parallel analysis, sequential synthesis, supervisor, HITL gate
 
 ## Layout
-- `project-context/1.define/` - system-description, MRD, PRD
-- `project-context/2.build/` - SAD (solution architecture)
+- `project-context/1.define/` - system-description, MRD, PRD, SAD (per AAMAD 0.7.5 Define layout)
+- `project-context/2.build/` - build artifacts: setup, frontend, backend, integration, QA (later)
 - `project-context/3.deliver/` - deploy runbook (later)
 - `data/` - synthetic project sheet + burn/capacity fixtures
 

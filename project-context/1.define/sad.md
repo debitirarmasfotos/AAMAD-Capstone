@@ -7,7 +7,7 @@ A crew of specialist agents turns raw program data into a review-ready executive
 readout - per-priority RAG rollup, capacity-vs-demand fit, and a ranked risk list -
 with a mandatory human approval gate before any output is treated as final. This SAD
 defines the runtime, the agents, how they coordinate, the data interface, and the
-shared state. It implements the requirements in `../1.define/prd.md`.
+shared state. It implements the requirements in `prd.md`.
 
 ### 2. Runtime decision
 **`AAMAD_TARGET_RUNTIME=claude-agent-sdk`** - chosen deliberately over the CrewAI default.
@@ -113,3 +113,23 @@ parallel + sequential + hierarchical (§4); communication via structured message
 shared state workspace (§6); supervisor-style architecture for a structured workflow with
 clear dependencies (§4); HITL on the high-risk final step (§8); and resilience with no
 single point of failure (§9). Evals/observability are scoped as production-phase work (§9).
+
+## Sources
+- `prd.md` and `mrd.md` in this folder (requirements, user stories, opportunity).
+- Course lesson material (runtime selection; MAS coordination patterns).
+- `data/README.md` for the synthetic fixtures and the seeded rollup/capacity signals.
+
+## Assumptions
+- The MVP reads the two synthetic CSVs in `data/`; a live connector replaces them later behind the same interface.
+- Claude Agent SDK hooks/permissions can implement the HITL stop as designed in §8.
+- The rollup and capacity rules in §7 are acceptable defaults, to be confirmed in Build.
+
+## Open Questions
+- Final RAG thresholds and how ties are broken when a priority has mixed child statuses.
+- Whether the supervisor retries a failed specialist or fails the run and reports the gap.
+- Which observability/eval framework to adopt in the production phase (§9).
+
+## Audit
+- Created 2026-08-08 by Melanie Arias. Status: DRAFT for course Define phase.
+- Resolved runtime: AAMAD_TARGET_RUNTIME=claude-agent-sdk (chosen over the crewai default; rationale in §2).
+- SAD relocated to project-context/1.define/ to match AAMAD 0.7.5 Define-phase layout.

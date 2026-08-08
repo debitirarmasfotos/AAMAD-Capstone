@@ -11,7 +11,7 @@ A program manager loads a mock project sheet and burn/capacity file. The crew in
 ### 3. Runtime and architecture pointer
 - **Application runtime:** `AAMAD_TARGET_RUNTIME=claude-agent-sdk`
 - **Rationale:** MCP connectors model the data sources cleanly; hooks and resumable sessions support a real approval gate; a governed agent loop fits the auditability requirement better than a purely declarative crew.
-- **Coordination pattern:** hybrid - parallel analysis (rollup, capacity, risk) after ingestion, sequential synthesis (narrative), hierarchical supervisor, and a hard HITL stop before output is final. Full detail lives in `2.build/sad.md`.
+- **Coordination pattern:** hybrid - parallel analysis (rollup, capacity, risk) after ingestion, sequential synthesis (narrative), hierarchical supervisor, and a hard HITL stop before output is final. Full detail lives in `sad.md`.
 
 ### 4. MVP user stories and acceptance criteria
 
@@ -61,4 +61,24 @@ As a program manager, I want to approve, edit, or reject before output is final.
 - Crew runs end to end on the synthetic dataset and produces a draft a program manager would accept with minor edits.
 - 100% of figures are traceable to source rows.
 - The workflow halts for human approval before marking output final.
-- Artifacts (system-description, MRD, PRD) are published under `project-context/1.define/`.
+- Artifacts (system-description, MRD, PRD, SAD) are published under `project-context/1.define/`.
+
+## Sources
+- `system-description.md` and `mrd.md` in this folder (problem frame, users, opportunity).
+- Course lesson material (AAMAD phases, MAS coordination patterns, runtime selection).
+- Author's program-management domain experience for user stories and acceptance criteria.
+
+## Assumptions
+- Ingestion reads a synthetic project sheet + burn/capacity file for the MVP.
+- RAG rollup and capacity fit follow the rules defined in `sad.md`.
+- The program manager (end user) is available to act as the HITL approver.
+
+## Open Questions
+- Exact RAG thresholds (e.g. how many at-risk children force Red) - to finalize with the SAD.
+- Whether "minor edits" acceptance is tracked qualitatively or via an edit-count metric.
+- Which fields a live connector must supply to preserve per-figure traceability.
+
+## Audit
+- Created 2026-08-08 by Melanie Arias. Status: DRAFT for course Define phase.
+- Product target runtime: AAMAD_TARGET_RUNTIME=claude-agent-sdk (recorded in the SAD Audit).
+- Scope posture: synthetic data only; no live publish in the MVP.
