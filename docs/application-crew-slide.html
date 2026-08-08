@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PMO Program Intelligence Crew - Application Crew</title>
+<style>
+  :root{
+    --bg:#eef1f6;
+    --slide:#ffffff;
+    --ink:#1f2933;
+    --muted:#6b7280;
+    --line:#cbd5e1;
+    --slate:#334155;
+    --ingest:#64748b;
+    --parallel:#0f766e;
+    --parallel-bg:#e6f4f1;
+    --seq:#1d4ed8;
+    --seq-bg:#e6edff;
+    --hitl:#b45309;
+    --hitl-bg:#fdf1e0;
+    --final:#15803d;
+    --final-bg:#e7f4ec;
+    --dev:#7c3aed;
+    --dev-bg:#f1eafe;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink);
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    min-height:100vh;
+    padding:24px;
+  }
+  .slide{
+    width:1280px;
+    height:720px;
+    background:var(--slide);
+    border-radius:16px;
+    box-shadow:0 18px 50px rgba(15,23,42,0.18);
+    padding:36px 44px 28px;
+    display:flex;
+    flex-direction:column;
+  }
+  header{border-bottom:2px solid var(--line);padding-bottom:14px;margin-bottom:16px;}
+  h1{font-size:27px;font-weight:700;letter-spacing:-0.2px;}
+  .sub{margin-top:6px;font-size:14px;color:var(--muted);}
+  .sub b{color:var(--slate);font-weight:600;}
+
+  .flowzone{flex:1;display:flex;flex-direction:column;justify-content:center;}
+  .flowlabel{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px;}
+
+  .flow{display:flex;align-items:center;gap:6px;}
+  .node{
+    border:1.5px solid var(--line);
+    border-radius:12px;
+    padding:12px 14px;
+    background:#fff;
+    width:168px;
+    min-height:96px;
+    display:flex;flex-direction:column;gap:5px;
+    box-shadow:0 2px 6px rgba(15,23,42,0.05);
+  }
+  .node .role{font-weight:700;font-size:14px;line-height:1.2;}
+  .node .task{font-size:11.5px;color:var(--muted);line-height:1.35;}
+  .node .tag{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;align-self:flex-start;padding:2px 7px;border-radius:999px;}
+
+  .ingest{border-color:var(--ingest);} .ingest .tag{background:#eef2f6;color:var(--ingest);}
+  .parallel{border-color:var(--parallel);} .parallel .tag{background:var(--parallel-bg);color:var(--parallel);}
+  .seq{border-color:var(--seq);} .seq .tag{background:var(--seq-bg);color:var(--seq);}
+  .hitl{border-color:var(--hitl);background:var(--hitl-bg);} .hitl .tag{background:#fbe4c4;color:var(--hitl);}
+  .final{border-color:var(--final);background:var(--final-bg);align-items:center;justify-content:center;text-align:center;width:118px;}
+  .final .role{color:var(--final);font-size:16px;}
+
+  .stack{display:flex;flex-direction:column;gap:9px;}
+  .stack .node{width:210px;min-height:0;padding:9px 12px;flex-direction:row;align-items:center;gap:9px;}
+  .stack .node .role{font-size:13px;width:118px;flex:none;}
+  .stack .node .task{font-size:10.5px;}
+
+  .arrow{flex:none;width:26px;display:flex;align-items:center;justify-content:center;color:var(--slate);font-size:22px;font-weight:700;}
+  .brace{flex:none;width:16px;align-self:stretch;border-top:2px solid var(--line);border-bottom:2px solid var(--line);border-right:2px solid var(--line);border-radius:0 10px 10px 0;margin:34px 0;}
+  .brace.left{border-right:none;border-left:2px solid var(--line);border-radius:10px 0 0 10px;}
+
+  .supervisor{
+    margin-top:16px;
+    background:var(--slate);
+    color:#fff;
+    border-radius:10px;
+    padding:11px 16px;
+    display:flex;align-items:center;gap:12px;
+    font-size:13px;
+  }
+  .supervisor .badge{font-weight:700;background:rgba(255,255,255,0.16);padding:4px 10px;border-radius:6px;font-size:12px;}
+  .supervisor .hint{color:#cbd5e1;font-size:11.5px;}
+
+  footer{margin-top:16px;display:flex;gap:18px;align-items:stretch;}
+  .devcrew{
+    flex:1;border:1.5px dashed var(--dev);background:var(--dev-bg);border-radius:10px;padding:10px 14px;
+  }
+  .devcrew .h{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--dev);margin-bottom:5px;}
+  .devcrew .p{font-size:11.5px;color:var(--ink);line-height:1.45;}
+  .devcrew .p b{color:var(--dev);}
+
+  .legend{flex:none;width:300px;display:flex;flex-direction:column;justify-content:center;gap:7px;font-size:11.5px;}
+  .legend .item{display:flex;align-items:center;gap:8px;}
+  .chip{width:14px;height:14px;border-radius:4px;flex:none;border:1.5px solid;}
+  .c-par{background:var(--parallel-bg);border-color:var(--parallel);}
+  .c-seq{background:var(--seq-bg);border-color:var(--seq);}
+  .c-hitl{background:var(--hitl-bg);border-color:var(--hitl);}
+  .c-hier{background:var(--slate);border-color:var(--slate);}
+</style>
+</head>
+<body>
+  <div class="slide">
+    <header>
+      <h1>PMO Program Intelligence Crew &nbsp;&#183;&nbsp; Application Crew</h1>
+      <div class="sub">
+        Runtime: <b>claude-agent-sdk</b> &nbsp;|&nbsp; End user: <b>program manager</b>
+        &nbsp;|&nbsp; Orchestration: <b>hybrid</b> (parallel analysis, sequential synthesis, hierarchical supervisor, human-in-the-loop gate)
+      </div>
+    </header>
+
+    <div class="flowzone">
+      <div class="flowlabel">Runtime flow: how the agents users interact with coordinate</div>
+      <div class="flow">
+
+        <div class="node ingest">
+          <span class="tag">Load</span>
+          <span class="role">Ingestion</span>
+          <span class="task">Reads the project sheet and burn/capacity file into one normalized shared state.</span>
+        </div>
+
+        <div class="arrow">&#8594;</div>
+        <div class="brace left"></div>
+
+        <div class="stack">
+          <div class="node parallel">
+            <span class="role">Status Rollup</span>
+            <span class="task">Derives each priority's RAG from child tasks, citing the rows.</span>
+          </div>
+          <div class="node parallel">
+            <span class="role">Capacity / Burn</span>
+            <span class="task">Computes utilization and a fit or no-fit signal per workstream.</span>
+          </div>
+          <div class="node parallel">
+            <span class="role">Risk &amp; Compliance</span>
+            <span class="task">Flags and ranks risks with source evidence and a suggested owner.</span>
+          </div>
+        </div>
+
+        <div class="brace"></div>
+        <div class="arrow">&#8594;</div>
+
+        <div class="node seq">
+          <span class="tag">Synthesize</span>
+          <span class="role">Narrative</span>
+          <span class="task">Builds the DRAFT executive readout from all analysis outputs.</span>
+        </div>
+
+        <div class="arrow">&#8594;</div>
+
+        <div class="node hitl">
+          <span class="tag">Human</span>
+          <span class="role">HITL Gate</span>
+          <span class="task">Program manager approves, edits, or rejects before anything is final.</span>
+        </div>
+
+        <div class="arrow">&#8594;</div>
+
+        <div class="node final">
+          <span class="role">FINAL</span>
+          <span class="task">Approved readout</span>
+        </div>
+
+      </div>
+
+      <div class="supervisor">
+        <span class="badge">Supervisor / Orchestrator</span>
+        <span>Holds shared state across all agents, routes work, and enforces the approval gate.</span>
+        <span class="hint">(hierarchical, spans the whole flow)</span>
+      </div>
+    </div>
+
+    <footer>
+      <div class="devcrew">
+        <div class="h">Development Crew &#183; builds the system (IDE / build time, not shipped)</div>
+        <div class="p">
+          <b>Define:</b> product-mgr (MRD, PRD), system-arch (SAD) &nbsp; &#183; &nbsp;
+          <b>Build:</b> project-mgr, backend-eng, frontend-eng, integration-eng &nbsp; &#183; &nbsp;
+          <b>Validate / Deliver:</b> qa-eng, security-eng, devops-eng
+        </div>
+        <div class="p" style="margin-top:6px;color:var(--muted);">
+          The Development Crew builds the thing. The Application Crew above is the thing.
+        </div>
+      </div>
+      <div class="legend">
+        <div class="item"><span class="chip c-par"></span> Parallel: independent analysis runs concurrently</div>
+        <div class="item"><span class="chip c-seq"></span> Sequential: Narrative depends on all analysis</div>
+        <div class="item"><span class="chip c-hitl"></span> Human-in-the-loop: hard stop before final</div>
+        <div class="item"><span class="chip c-hier"></span> Hierarchical: Supervisor owns shared state</div>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>
