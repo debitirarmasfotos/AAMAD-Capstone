@@ -1,0 +1,19 @@
+Priority Name,Task,Owner,Status,Due Date
+Customer Data Platform,,,,
+Customer Data Platform,Stand up data lake,A. Rivera,Complete,2026-06-15
+Customer Data Platform,Ingest source systems,A. Rivera,Complete,2026-06-28
+Customer Data Platform,Identity resolution rules,P. Osei,In Progress,2026-08-20
+Customer Data Platform,Data quality monitoring,P. Osei,Not Started,2026-09-10
+Campaign Engine,,,,
+Campaign Engine,Segment builder config,L. Tran,Complete,2026-07-05
+Campaign Engine,Journey templates,L. Tran,In Progress,2026-08-18
+Campaign Engine,Suppression rules,M. Klein,At Risk,2026-08-14
+Campaign Engine,Deliverability warm-up,M. Klein,Not Started,2026-09-01
+Analytics & Reporting,,,,
+Analytics & Reporting,KPI data model,S. Bauer,Complete,2026-07-12
+Analytics & Reporting,Executive dashboard,S. Bauer,In Progress,2026-08-25
+Analytics & Reporting,Attribution model,D. Ferro,Not Started,2026-09-20
+Governance & Compliance,,,,
+Governance & Compliance,Data access policy,R. Nunez,Complete,2026-06-30
+Governance & Compliance,Consent management,R. Nunez,At Risk,2026-08-12
+Governance & Compliance,Audit logging,J. Park,In Progress,2026-08-29
