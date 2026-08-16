@@ -8,6 +8,8 @@ single "Generate Program Readout" workflow. The functional contract this build
 follows lives in `frontend-funcional-spec.md` at the repo root; this artifact records
 what was actually built and verified.
 
+**Demo video:** https://www.loom.com/share/c10c38bdd0a647ec992896a39590884e (input -> run -> DRAFT readout, status states, error/retry; running on stubbed services).
+
 ## 1. Overview
 
 - One critical workflow: **Generate Program Readout**. The operator runs the crew

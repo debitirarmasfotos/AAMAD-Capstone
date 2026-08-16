@@ -39,7 +39,7 @@ npm run build    # production build
 npm test         # happy-path test
 ```
 
-**Demo video:** _TODO - paste your Loom or uploaded video link here._
+**Demo video:** https://www.loom.com/share/c10c38bdd0a647ec992896a39590884e
 
 ## Status
 Define phase complete (MRD, PRD, SAD). Build phase in progress: frontend MVP scaffold
