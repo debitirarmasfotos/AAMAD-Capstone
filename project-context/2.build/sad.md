@@ -155,12 +155,22 @@ projection of the shared-state `draft` object (§6), not a new schema.
   to `'APPROVED'`, and `REJECTED` to `'REJECTED'`. `HALTED` is not a `draft.status`; it reports
   the retry-then-halt failure path (§4/§9), where no DRAFT is synthesized from partial data.
 
-**Frontend view shape (decided, MVP-lean):** a single minimal web chat page (one screen),
-system theme, minimal visual style (per `aamad.config.yml` `ui`). It renders the DRAFT as a
-Markdown readout and exposes Approve / Edit (inline-editable draft) / Reject (with reason)
-controls at the HITL gate. It is a thin client over the `/api/runs` contract above and holds
-no business logic. Out of scope for the MVP page: authentication, multi-session, persistent
-history, and any additional screens (consistent with §10).
+**Frontend view shape (decided, MVP-lean):** a single-screen web app, system theme, minimal
+visual style (per `aamad.config.yml` `ui`). It renders the DRAFT as a readout and exposes
+Approve / Edit (inline-editable draft) / Reject (with reason) controls at the HITL gate. It is
+a thin client over the `/api/runs` contract above and holds no business logic. Out of scope
+for the MVP page: authentication, multi-session, persistent history, and any additional
+screens (consistent with §10).
+
+**Frontend stack (decided):** React + TypeScript (Vite), superseding the earlier
+"vanilla HTML/JS" note. The MVP scaffold implements the single "Generate Program Readout"
+workflow with an explicit idle -> running -> done (+ error) finite-state machine, a status
+banner (idle/running/done/error with a colored pill and a last-updated timestamp), Run and
+Reset controls, and an inline error state with Retry. It currently runs against stubbed
+services (`startRun`, `getRunStatus`) that return a mock readout matching the §6 shared-state
+shape; these are replaced by the real `/api/runs` calls in a later Build step. The React app
+remains a thin client and holds no business logic. See `frontend-funcional-spec.md` at the
+repo root for the component and contract detail.
 
 ### 9. Non-functional and observability
 - **Auditability:** every readout figure resolves to a `sourceRef`.
@@ -226,4 +236,5 @@ Resolved (retained for audit trail):
 - 2026-08-08, @system.arch, sad-review: second pass against the current refined PRD. Resolved runtime: AAMAD_TARGET_RUNTIME=claude-agent-sdk (confirmed in §2, §4 mapping, and this Audit; adapter and PRD agree). Closed a coverage gap for PRD AC-3.1 by adding `runRate` to the §6 workstream shape and defining it in §7 as `used / capacity` utilization (the fixture has no time dimension for an hours-per-period rate; noted in Assumptions). Closed a determinism gap by specifying a total-order risk ranking with a stable tie-break key in §7, so the Reproducibility NFR holds for the full risk list. Verified all PRD forward references into §6 (state shape, draft.status, decisionReason) and §7 (RAG rollup, capacity fit, gap-based ranking) resolve. No scope invented. No headings changed.
 - 2026-08-08, @system.arch, define-api-and-frontend: added two Build-readiness contracts under §8 in place. Resolved runtime: claude-agent-sdk. (1) A concrete chat <-> runtime API contract (local HTTP + JSON): POST /api/runs (AWAITING_APPROVAL with draft, or HALTED with diagnostic on the retry-then-halt path), POST /api/runs/{runId}/decision (approve/edit/reject, idempotent), GET /api/runs/{runId} for polling; runId-keyed claude-agent-sdk resumable session mapping; a JSON error envelope; and a one-line mapping from API run status to shared-state draft.status (§6) with HALTED tied to the §4/§9 failure path. The draft payload is a view projection of the §6 draft object, not a new schema. (2) A frontend view shape: a single MVP-lean web chat page (one screen, system theme, minimal style per aamad.config.yml), a thin client over /api/runs with no business logic, rendering the Markdown readout and Approve/Edit/Reject controls; auth, multi-session, persistent history, and extra screens are out of scope (consistent with §10). No scope invented beyond these two decisions. No headings changed or renumbered.
 - 2026-08-08, @system.arch, resolve-open-questions: folded three approved decisions into the SAD in place. Resolved runtime: claude-agent-sdk. (1) HITL DRAFT surface fixed to a Markdown readout in the MVP chat interface with inline approve / edit / reject (§8, §4 flow), MVP-lean with no extra UI. (2) Specialist-failure behavior fixed to one idempotent Supervisor retry then HALT with a Diagnostic naming the failed workstream, never synthesizing a DRAFT from partial data (§4 failure handling, §9 Resilience). (3) Config conflict closed by a local `aamad.config.yml` (runtime.target: claude-agent-sdk). Moved the three corresponding Open Questions to a Resolved list. No scope invented. No headings changed.
+- 2026-08-08, @system.arch, record-frontend-stack: recorded the frontend stack decision in §8 as React + TypeScript (Vite), superseding the earlier vanilla HTML/JS note. Operator-approved during the Build-phase frontend module. The React app implements the single "Generate Program Readout" workflow with an idle -> running -> done (+ error) FSM, status banner, and Run/Reset controls over stubbed services, to be wired to the real `/api/runs` contract in a later step. Resolved runtime unchanged: AAMAD_TARGET_RUNTIME=claude-agent-sdk. Wording/decision record only; no other headings changed.
 - 2026-08-08, @system.arch, correct-config-record: clarified the config-conflict resolution to reflect that `aamad.config.yml` is gitignored local state (not tracked), and that the tracked `aamad.config.example.yml` template was aligned to `runtime.target: claude-agent-sdk`. Runtime remains authoritative via AAMAD_TARGET_RUNTIME and the PRD/SAD. Wording only; no architecture or headings changed.

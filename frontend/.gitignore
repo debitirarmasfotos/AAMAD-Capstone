@@ -1,0 +1,19 @@
+# Dependencies
+node_modules
+
+# Build output
+dist
+
+# Vite / test caches
+.vite
+coverage
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS
+.DS_Store
+
+# TS incremental build cache
+*.tsbuildinfo
