@@ -43,11 +43,23 @@ cp .env.example .env
 ## Run
 
 ```bash
-# from backend/
+# from backend/ (venv active, OPENAI_API_KEY set in .env)
+
+# Option A - one-shot CLI: run a single capstone readout end to end and
+# save the output. Executes deterministic ingestion + analysis, then the
+# Narrative crew, and writes docs/sample-readout.md and docs/sample-run.json.
+python main.py run
+
+# Option B - serve the API:
+python main.py serve
+# equivalently:
 uvicorn src.app:app --host 127.0.0.1 --port 8000
-# or:
-python main.py
 ```
+
+`python main.py run` is the documented one-command kickoff of a capstone
+scenario over the synthetic dataset in `data/`. A saved example of its output is
+committed at `docs/sample-readout.md` (human-readable) and `docs/sample-run.json`
+(full envelope).
 
 Without a real `OPENAI_API_KEY`, `POST /api/runs` fails closed with
 `503 { "error": { "code": "missing_api_key" } }` - by design, no draft is
