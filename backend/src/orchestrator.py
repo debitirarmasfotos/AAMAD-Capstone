@@ -78,20 +78,27 @@ def _run_narrative(state: StateSummary, inputs: Dict[str, Any]) -> Draft:
     # to be importable in every context.
     from .crew import NarrativeCrew
 
+    from .narrative_output import NarrativeDraft
+
     focus = str(inputs.get("focus") or "").strip()
     result = NarrativeCrew().crew().kickoff(
         inputs={"facts": _facts_text(state), "focus": focus}
     )
 
-    draft: Optional[Draft] = getattr(result, "pydantic", None)
-    if draft is None:
-        # Fall back to parsing the raw JSON payload into a Draft.
+    written: Optional[NarrativeDraft] = getattr(result, "pydantic", None)
+    if written is None:
+        # Fall back to parsing the raw JSON payload into the narrow output model.
         raw = getattr(result, "raw", None) or str(result)
-        draft = Draft.model_validate_json(raw)
+        written = NarrativeDraft.model_validate_json(raw)
 
-    # The status is a backend invariant, not the model's decision.
-    draft.status = "DRAFT"
-    return draft
+    # Map the LLM prose into the full frozen Draft. status is a backend
+    # invariant (DRAFT until the HITL gate records a decision), not the model's.
+    return Draft(
+        markdown=written.markdown,
+        summary=written.summary,
+        bullets=written.bullets,
+        status="DRAFT",
+    )
 
 
 def run_readout(inputs: Optional[Dict[str, Any]] = None, run_id: Optional[str] = None) -> RunResponse:

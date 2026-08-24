@@ -14,7 +14,7 @@ import os
 from crewai import LLM, Agent, Crew, Process, Task
 from crewai.project import CrewBase, agent, crew, task
 
-from .models import Draft
+from .narrative_output import NarrativeDraft
 
 
 @CrewBase
@@ -39,10 +39,11 @@ class NarrativeCrew:
 
     @task
     def narrative_task(self) -> Task:
-        # output_pydantic binds the LLM output to the frozen Draft shape.
+        # output_pydantic binds the LLM output to the converter-safe NarrativeDraft
+        # (markdown, summary, bullets). The orchestrator maps it into the full Draft.
         return Task(
             config=self.tasks_config["narrative_task"],
-            output_pydantic=Draft,
+            output_pydantic=NarrativeDraft,
         )
 
     @crew
