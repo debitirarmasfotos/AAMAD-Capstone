@@ -24,7 +24,9 @@ export function InputsPanel({
   onRun,
   onReset,
 }: InputsPanelProps) {
+  // A run is active while running or awaiting the HITL decision.
   const isRunning = state === "running";
+  const isActive = state === "running" || state === "awaiting_approval";
 
   return (
     <section aria-labelledby="inputs-heading" className="panel">
@@ -56,12 +58,12 @@ export function InputsPanel({
           disabled={isRunning}
         />
         <label htmlFor="force-error-toggle">
-          Force stub error (dev/testing: demonstrates the error path)
+          Force halted path (dev/testing: demonstrates the HALTED diagnostic)
         </label>
       </div>
 
       <div className="controls">
-        <button type="button" onClick={onRun} disabled={isRunning}>
+        <button type="button" onClick={onRun} disabled={isActive}>
           {isRunning ? "Running..." : "Run"}
         </button>
         <button type="button" className="secondary" onClick={onReset} disabled={isRunning}>

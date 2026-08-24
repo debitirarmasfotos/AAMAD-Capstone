@@ -255,6 +255,61 @@ readout, the stubbed HITL note, and the History section.
   render path in the Results panel. Recorded here as a future note.
 - Tool-call details and costs are out of scope for this UI.
 
+## 9. Frozen HITL contract and poll loop (Sprint 2 refinement)
+
+Per the Sprint 2 review, the human-in-the-loop (HITL) decision contract is frozen
+in the UI BEFORE the backend is built, so the backend implements an envelope the
+frontend already consumes.
+
+- **Frozen contract types (`src/types.ts`):** the SAD section 8 envelope is now the
+  authoritative shape. `RunResponse` (from `POST /api/runs` and
+  `GET /api/runs/{runId}`) carries `{ runId, status, draft?, stateSummary?,
+  diagnostic? }`; when `status` is `HALTED` the `diagnostic` is present and `draft`
+  is absent. `StateSummary` is a typed projection of the SAD section 6 shared state
+  (`priorities`, `workstreams`, `risks`) with the existing field names the Results
+  panel already renders. `draft` adds a rendered `markdown` alongside `summary` /
+  `bullets` / `status`. `DecisionRequest` (`{ action: "approve" | "edit" |
+  "reject", edits?, reason? }`) and `DecisionResponse` (`{ runId, status:
+  "APPROVED" | "REJECTED", finalReadout? }`) are the body/response of
+  `POST /api/runs/{runId}/decision`. `Diagnostic` and `ErrorEnvelope` complete the
+  set. Server statuses (`RunStatus`) are kept distinct from the client-only FSM
+  phases.
+- **Envelope validation (`src/services/validateEnvelope.ts`):** small hand-written
+  type-guards (`assertRunResponse`, `assertDecisionResponse`) enforce the frozen
+  shape at the services boundary. No schema library was added.
+- **FSM states (`src/state/runMachine.ts`):** `AWAITING_APPROVAL` is now a
+  first-class state and `HALTED` is handled. Client phases: `idle -> running ->
+  awaiting_approval -> (approved | rejected)`, `running -> halted`, plus an `error`
+  state for transport/client failures. The green approved state is never entered
+  while the draft is DRAFT / awaiting approval. Events: `RUN`, `POLL_AWAITING`,
+  `POLL_HALTED`, `DECIDE_APPROVE` / `APPROVED`, `DECIDE_REJECT` / `REJECTED`,
+  `FAIL`, `RESET`.
+- **Poll loop:** `startRun` returns a run acknowledgement (`{ runId, status:
+  "running" }`), then the client POLLS `getRunStatus(runId)` on an interval. The
+  stub reports `{ pending: true }` for a couple of polls (the running phase) before
+  it returns `AWAITING_APPROVAL` (with `draft` + `stateSummary`) or `HALTED` (with a
+  diagnostic), so the running -> awaiting transition is visible. The `forceError` /
+  HALTED demo path is triggered only inside the stub (dev checkbox or
+  `?forceError=1`) and is never placed in any live request body. `focus` / `top_n`
+  are optional client inputs only.
+- **HITL controls (`src/components/ResultsPanel.tsx`):** Approve, Edit (inline
+  textarea prefilled with the draft markdown), and Reject (required reason) are
+  shown only at `AWAITING_APPROVAL` and wired to the stubbed
+  `submitDecision(runId, DecisionRequest)`. Approve/edit resolve to APPROVED (final
+  readout shown); reject resolves to REJECTED (reason shown, no final output).
+- **Status banner copy:** softened from "Crew:" to "Run status:" since this page is
+  a run client, not a five-agent chat. Pill colors: idle gray, running blue,
+  awaiting approval amber, approved green, rejected neutral gray, halted red, error
+  red. Last-updated timestamp and aria-live retained.
+- **`mockCrew.ts` is the temporary services layer:** it is the only services layer
+  for the MVP and is designed to be swapped for the real `/api/runs` HTTP+JSON
+  calls (SAD section 8) using the SAME frozen types. Only the services layer
+  changes at integration time.
+- **Verified (this refinement):** `npm run build` succeeded (tsc project build plus
+  Vite production bundle, 38 modules transformed). `npm test` passed: 1 file, 2
+  tests green - the happy path (run -> poll -> awaiting_approval -> approve ->
+  approved) and the HALTED path (forced demo toggle -> halted diagnostic).
+
 ## Sources
 
 - `frontend-funcional-spec.md` (repo root): the functional contract this build follows.
@@ -299,3 +354,18 @@ readout, the stubbed HITL note, and the History section.
   happy-path Vitest test passed. Stubs and HITL approval logic remain to be wired to the
   real `/api/runs` contract (SAD section 8) in a later Build step. No features documented
   that are not present in the code.
+- 2026-08-18, frontend.eng, freeze-hitl-contract, resolved AAMAD_TARGET_RUNTIME=crewai.
+  Froze the SAD section 8 HITL decision envelope in the UI before the backend is built:
+  `types.ts` now defines `RunResponse`, `StateSummary`, `Draft` (with `markdown`),
+  `DecisionRequest`, `DecisionResponse`, `Diagnostic`, and `ErrorEnvelope`, with server
+  `RunStatus` kept separate from client FSM phases. Added envelope type-guards
+  (`services/validateEnvelope.ts`) at the boundary (no schema dep). Extended the FSM so
+  `AWAITING_APPROVAL` is first-class and `HALTED` is handled (`POLL_AWAITING`,
+  `POLL_HALTED`, `DECIDE_APPROVE`/`APPROVED`, `DECIDE_REJECT`/`REJECTED`, `FAIL`, `RESET`).
+  Switched the stub to a poll loop (`startRun` ack then poll `getRunStatus` through a
+  couple of running polls to `AWAITING_APPROVAL` or `HALTED`) and added a stubbed
+  `submitDecision`. Added Approve / Edit / Reject controls on the Results panel at the
+  gate. Softened the banner copy to "Run status:" with per-state pill colors. `npm run
+  build` succeeded and `npm test` passed (2 tests: approve happy path and HALTED path).
+  Note: the SAD records the resolved runtime as `claude-agent-sdk`; the token recorded
+  for this action per the operator instruction is `AAMAD_TARGET_RUNTIME=crewai`.
