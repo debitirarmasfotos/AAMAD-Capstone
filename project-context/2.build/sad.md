@@ -12,12 +12,16 @@ shared state. It implements the requirements in `prd.md`.
 ### 2. Runtime decision
 **`AAMAD_TARGET_RUNTIME=crewai`** - selected for the Sprint-3 build track.
 
-Decision: for the Sprint-3 build we target crewai. The orchestrator is a CrewAI Flow that
-runs the deterministic ingestion and analysis steps in Python (the Supervisor role), and a
-small Crew (a single LLM agent, optionally two) drafts the Narrative readout from the
-computed state. This keeps the arithmetic (RAG rollup, capacity fit, risk ranking) in
-deterministic code per the Reproducibility NFR (§7, §9) and confines the model to language
-generation.
+Decision: for the Sprint-3 build we target crewai. The orchestrator is an application
+orchestrator that is Flow-shaped: a plain Python coordinator (`orchestrator.py`) that runs
+the deterministic ingestion and analysis steps and then invokes the Narrative crew. It is
+NOT an instance of CrewAI's `Flow` class, so there is no library-provided pause/resume; the
+HITL pause is the HTTP request boundary plus the in-memory `RUNS` store (§4, §8). A small
+Crew (a single LLM agent, optionally two) drafts the Narrative readout from the computed
+state. This keeps the arithmetic (RAG rollup, capacity fit, risk ranking) in deterministic
+code per the Reproducibility NFR (§7, §9) and confines the model to language generation.
+The CrewAI usage that earns its keep is the YAML-first Narrative crew (sequential process,
+`output_pydantic`); a real CrewAI `Flow` is optional post-MVP if the library API is wanted.
 
 Note (honest record): this REVERSES the earlier `claude-agent-sdk` decision. The §8 API
 contract (`/api/runs`, `GET /api/runs/{runId}`, `/api/runs/{runId}/decision`, JSON error
@@ -30,11 +34,11 @@ The five runtime-selection questions, answered for the crewai target:
 
 | Question | Answer |
 |---|---|
-| Language & deploy shape | Python service; a CrewAI Flow + a small Crew behind a FastAPI app |
+| Language & deploy shape | Python service; a Flow-shaped Python coordinator + a small Crew behind a FastAPI app |
 | Model strategy | Single LLM for the Narrative only, low/zero temperature (analysis is code, not a model) |
-| Orchestration metaphor | Declarative Flow orchestrator over deterministic steps + one Narrative crew |
+| Orchestration metaphor | Python coordinator over deterministic steps + one Narrative crew (not CrewAI's Flow class) |
 | Tooling | Deterministic Python tools (`ProgramSource.fetch()`, `compute_program_state`); no MCP required for the MVP |
-| Learning vs differentiation | Aligns with the Sprint-3 build track; HITL + auditability preserved in the Flow |
+| Learning vs differentiation | Aligns with the Sprint-3 build track; HITL + auditability preserved via the HTTP pause and in-memory store |
 
 Set explicitly before Build:
 ```bash
@@ -76,33 +80,38 @@ Ingestion ──────────┼─ Capacity/Burn ─┼──► Nar
         ▲                (parallel)          (sequential)
         └──────────── Supervisor holds shared state throughout (hierarchical) ────────────┘
 ```
-- **Parallel:** Rollup, Capacity, and the initial Risk scan run concurrently after Ingestion.
+- **Parallel (logical):** Rollup, Capacity, and the initial Risk scan are independent after
+  Ingestion. The diagram shows their logical independence; the MVP runs them as a
+  SEQUENTIAL implementation of these parallel analysis steps inside `compute_program_state`
+  (a deterministic function), which is acceptable because they are pure and share no state.
 - **Sequential:** Narrative depends on all analysis outputs; final Risk ranking consumes the capacity signal.
-- **Hierarchical:** the Supervisor routes work and owns the shared state.
+- **Hierarchical:** the orchestrator routes work and owns the shared state.
 - **HITL:** a hard stop for human approve / edit / reject before output is marked final;
   the DRAFT is presented as a Markdown readout in the MVP chat interface (§8).
 
-**Runtime mapping (crewai):** the Supervisor is a CrewAI Flow that runs DETERMINISTIC
-Python steps for ingestion and analysis: `ProgramSource.fetch()` (§5) loads the two CSVs,
-then a `compute_program_state` module/tool produces the RAG rollup, capacity fit, and risk
-ranking using the fixed rules in §7 (this is CODE, not an LLM). Only the Narrative is an
-LLM step: a small Crew with a single agent (`allow_delegation=false`, low/zero temperature)
-that drafts the readout from the computed state. Optionally a second agent phrases risk
-DESCRIPTIONS only; ranking stays in code. Net: a Flow + one (at most two) LLM agents, not
-five LLM specialists. The analysis steps return typed fragments and the Flow merges them
-into the single `programState` (§6), so there are no concurrent writers.
+**Runtime mapping (crewai):** the orchestrator is a plain Python coordinator
+(`orchestrator.py`) that plays the Flow role; it is NOT an instance of CrewAI's `Flow`
+class (there is no library pause/resume). It runs DETERMINISTIC Python steps for ingestion
+and analysis: `ProgramSource.fetch()` (§5) loads the two CSVs, then `compute_program_state`
+produces the RAG rollup, capacity fit, and risk ranking using the fixed rules in §7 (this
+is CODE, not an LLM). Only the Narrative is an LLM step: a CrewAI Crew with a single agent
+(`allow_delegation=false`, low/zero temperature, `output_pydantic`) that drafts the readout
+from the computed state. Optionally a second agent phrases risk DESCRIPTIONS only; ranking
+stays in code. Net: a Python coordinator + one (at most two) LLM agents, not five LLM
+specialists. The analysis returns typed fragments merged into the single `programState`
+(§6), so there are no concurrent writers.
 
-HITL is the HTTP pause of §8, not a model permission prompt: the Flow pauses at
-`AWAITING_APPROVAL`, the human calls `POST /api/runs/{runId}/decision`, and the run resumes
-(approve/edit/reject). A FastAPI app exposes `POST /api/runs` (start),
+HITL is the HTTP pause of §8, not a model permission prompt and not a CrewAI Flow pause:
+the coordinator returns at `AWAITING_APPROVAL` and the run is held in an in-memory `RUNS`
+store keyed by `runId`; the human calls `POST /api/runs/{runId}/decision` and the stored run
+transitions (approve/edit/reject). A FastAPI app exposes `POST /api/runs` (start),
 `GET /api/runs/{runId}` (poll), and `POST /api/runs/{runId}/decision` exactly as in §8.
-Run/Flow state is keyed by `runId`.
 
-**Failure handling (decided):** on a failed step the Flow performs exactly one idempotent
-retry of that step. If the retry also fails, the run HALTS and the Flow emits a Diagnostic
-identifying the failed workstream. The Flow does not synthesize a final DRAFT from partial
-data, so reproducibility, HITL integrity, and figure-to-source traceability are preserved
-(§9).
+**Failure handling (decided):** on a failed step the coordinator performs exactly one
+idempotent retry of that step. If the retry also fails, the run HALTS and the coordinator
+emits a Diagnostic identifying the failed workstream. No final DRAFT is synthesized from
+partial data, so reproducibility, HITL integrity, and figure-to-source traceability are
+preserved (§9).
 
 ### 5. Ingestion interface (source-agnostic)
 Downstream agents never read a file format directly. Ingestion exposes a stable
@@ -283,3 +292,4 @@ Resolved (retained for audit trail):
 - 2026-08-08, @system.arch, record-frontend-stack: recorded the frontend stack decision in §8 as React + TypeScript (Vite), superseding the earlier vanilla HTML/JS note. Operator-approved during the Build-phase frontend module. The React app implements the single "Generate Program Readout" workflow with an idle -> running -> done (+ error) FSM, status banner, and Run/Reset controls over stubbed services, to be wired to the real `/api/runs` contract in a later step. Resolved runtime unchanged: AAMAD_TARGET_RUNTIME=claude-agent-sdk. Wording/decision record only; no other headings changed.
 - 2026-08-08, @system.arch, correct-config-record: clarified the config-conflict resolution to reflect that `aamad.config.yml` is gitignored local state (not tracked), and that the tracked `aamad.config.example.yml` template was aligned to `runtime.target: claude-agent-sdk`. Runtime remains authoritative via AAMAD_TARGET_RUNTIME and the PRD/SAD. Wording only; no architecture or headings changed.
 - 2026-08-18, @system.arch, runtime-switch-and-review-fixes: resolved AAMAD_TARGET_RUNTIME=crewai for the Sprint-3 build track. Switched §2 from claude-agent-sdk to crewai (CrewAI Flow as the deterministic orchestrator + a small Narrative Crew), noting the switch REVERSES the earlier claude-agent-sdk decision, that the §8 API contract and HITL semantics are unchanged, and that it should be confirmed with the instructor; retained the prior rationale as superseded. Instructor fix #1: reclassified Ingestion, Status Rollup, Capacity/Burn, and risk ranking as DETERMINISTIC Flow steps/tools (ProgramSource.fetch() + compute_program_state per §7), leaving the Narrative as the one LLM agent (risk descriptions optional LLM) - net a Flow + at most two LLM agents, not five specialists; updated §3 table, §4 runtime mapping and failure handling, §9 wording, and §11 MAS mapping accordingly. Reframed the §8 HITL as the HTTP pause/resume on the Flow (endpoints, §6 state shape, and §7 rules kept INTACT). Instructor fix #5: moved the RAG-threshold Open Question to Resolved (decided in §7; only the qualitative "minor edits" measure stays open) and recorded the MVP run store as IN-MEMORY keyed by runId (lost on restart, persistence deferred) in Assumptions and §8. No headings changed; §6/§7/§8 contracts preserved.
+- 2026-08-19, @system.arch, orchestrator-accuracy: per Sprint-3 review, corrected an over-claim so the docs match the code. The orchestrator is a plain Python coordinator (orchestrator.py) that is Flow-SHAPED, not an instance of CrewAI's Flow class; there is no library pause/resume, and HITL is the HTTP request boundary plus the in-memory RUNS store keyed by runId. Updated §2 and §4 wording (and the runtime-selection table) accordingly, and clarified §4 that the "parallel" analysis is implemented sequentially inside compute_program_state (pure, shared-state-free) for the MVP. The CrewAI usage that stands is the YAML-first Narrative crew (sequential process, output_pydantic); a real CrewAI Flow is optional post-MVP. No contract change.

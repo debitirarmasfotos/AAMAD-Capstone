@@ -24,8 +24,13 @@ HITL pause -> POST /api/runs/{runId}/decision -> APPROVED / REJECTED
   `Process.sequential`, `temperature=0`). It only phrases the already-computed
   facts; it never recomputes or alters a RAG value, gap, evidence ref, or rank.
   The computed state is injected into the prompt as authoritative `{facts}`.
-- This matches the SAD section 2/4 mapping: a Flow-style deterministic
-  orchestrator plus a Narrative crew of one, not five LLM specialists.
+- This matches the SAD section 2/4 mapping: a Flow-SHAPED Python coordinator
+  (`orchestrator.py`) plus a Narrative crew of one, not five LLM specialists.
+  To be precise (per Sprint-3 review): the orchestrator is a plain Python
+  coordinator, NOT an instance of CrewAI's `Flow` class, so there is no
+  library-provided pause/resume. HITL is the HTTP request boundary plus the
+  in-memory `RUNS` store keyed by `runId`. The CrewAI usage that stands is the
+  YAML-first Narrative crew (sequential process, `output_pydantic`).
 
 ## 2. Deterministic rules (SAD section 7)
 
@@ -141,10 +146,12 @@ Verified offline against the real CSVs in `backend/.venv` (Python 3.12, crewai
   body -> 422.
 - pytest: 15 passed, 0 failed.
 
-Deferred (needs the operator's key): a full live run producing a Narrative DRAFT
-and reaching `AWAITING_APPROVAL` requires a real `OPENAI_API_KEY`. The Narrative
-crew and orchestrator wiring are in place and exercised by imports; the live
-kickoff is an operator/integration step next sprint.
+Live-verified (needs a funded key): the full live run producing a Narrative DRAFT
+and reaching `AWAITING_APPROVAL` was verified on 2026-08-19 with a real
+`OPENAI_API_KEY` (about 10s), including the approve decision to APPROVED with a
+`finalReadout`. A saved sample is committed at `docs/sample-readout.md` and
+`docs/sample-run.json`; `python main.py run` reproduces it. The offline pytest
+suite (no key) remains the CI gate; the live kickoff is an operator step.
 
 ## Sources
 
@@ -187,5 +194,14 @@ kickoff is an operator/integration step next sprint.
   mirror the frozen `frontend/src/types.ts` in camelCase. Verified in
   `backend/.venv` (crewai 0.86.0, fastapi 0.115.6, setuptools 79.0.1): clean
   imports, deterministic compute against the real CSVs, and FastAPI TestClient
-  contract checks. pytest: 15 passed. No paid LLM calls; a live Narrative run is
-  deferred to the operator's key. No secrets committed.
+  contract checks. pytest: 15 passed. No paid LLM calls in the offline suite. No
+  secrets committed.
+- 2026-08-19, @backend.eng, verify-live: the live Narrative path was subsequently
+  verified end to end on 2026-08-19 with a funded `OPENAI_API_KEY`. `POST /api/runs`
+  returned `AWAITING_APPROVAL` with a real DRAFT (about 10s), the draft cited the
+  same fixture truth as the deterministic state (Amber/Red priorities, gaps
+  200/400/600, Governance top risk gap 600h), and `POST /api/runs/{runId}/decision`
+  approve transitioned to APPROVED with a `finalReadout`. A saved sample is committed
+  at `docs/sample-readout.md` and `docs/sample-run.json`, and `python main.py run`
+  reproduces it. The offline pytest suite (no key) remains the CI gate; the live run
+  is an operator step, not part of CI.
