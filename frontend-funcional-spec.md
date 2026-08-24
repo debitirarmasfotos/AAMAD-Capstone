@@ -8,8 +8,13 @@ and a draft narrative). The UI is a thin client with no business logic; all
 rollup, capacity, and ranking rules live in the backend (SAD section 7).
 
 Scope note: this build is frontend-only. Services are stubbed with fixed mock
-payloads (no backend, no network). The approve/edit/reject HITL logic is not
-wired yet; the review surface is shown but stubbed.
+payloads (no backend, no network). The human-in-the-loop (HITL) decision
+contract is now FROZEN in the UI before the backend is built, so the backend
+implements an envelope the client already consumes. The approve / edit / reject
+controls are wired against a stubbed decision service (`submitDecision`) that
+returns the frozen response shapes; swapping the stub for the real
+`/api/runs/{runId}/decision` endpoint is a services-layer change with the SAME
+types.
 
 Traceability: PRD US-1 through US-6, SAD section 6 (shared state), SAD section 7
 (rollup/capacity/ranking rules), SAD section 8 (/api/runs contract). Runtime:
@@ -30,16 +35,24 @@ App location: `frontend/` (Vite + React + TypeScript, single route, one page).
 
 ## Run
 
-- Controls are **Run** and **Reset** only. No pause, cancel, or retry-diff.
-- Run drives a tiny explicit finite-state machine (see Contracts). On Run the
-  app calls `startRun()` then `getRunStatus()`; on success it renders the
-  readout, on failure it enters the error state.
-- While running, the Run button is disabled and labeled "Running..."; inputs are
-  disabled.
-- Status banner at the top shows "Crew: idle | running | done | error" with a
-  colored pill (gray idle, blue running, green done, red error) and a
-  "last updated" timestamp. Status wording is consistent across the banner,
-  buttons, and inline messages. The banner uses an aria-live region.
+- Controls are **Run** and **Reset** only. No pause, cancel, or retry-diff. The
+  HITL decision controls (Approve / Edit / Reject) live on the Results panel and
+  appear only at the approval gate.
+- Run drives an explicit finite-state machine (see Contracts). On Run the app
+  calls `startRun()` for a run acknowledgement, then POLLS `getRunStatus()` on an
+  interval until the run reaches `AWAITING_APPROVAL` (renders the DRAFT with
+  decision controls) or `HALTED` (renders a diagnostic). Transport/client
+  failures enter the error state.
+- While running or awaiting approval, the Run button is disabled; the Run button
+  reads "Running..." while running.
+- Status banner at the top reads "Run status:" (this page is a run client, not a
+  five-agent chat) and reflects the client phases idle | running | awaiting
+  approval | approved | rejected | halted | error, with a colored pill (gray
+  idle, blue running, amber awaiting approval, green approved, neutral gray
+  rejected, red halted, red error) and a "last updated" timestamp. The green
+  approved state is never shown while the draft is DRAFT / awaiting approval.
+  Status wording is consistent across the banner, buttons, and inline messages.
+  The banner uses an aria-live region.
 
 ## Results
 
@@ -51,11 +64,16 @@ App location: `frontend/` (Vite + React + TypeScript, single route, one page).
     (used/capacity), remaining vs demand.
   - Ranked risks: description, severity, suggested owner, evidence; ordered
     severity descending then capacity gap descending (SAD section 7 total order).
-- A clearly stubbed HITL note is shown to stay faithful to the review surface:
-  "Awaiting human approval (approve/edit/reject wired in a later module)". No
-  approval logic is built now.
-- On error the panel shows an inline message plus a **Retry** button that
-  re-runs with the SAME inputs.
+- At the approval gate (`AWAITING_APPROVAL`) the panel shows the HITL decision
+  controls: **Approve** (submits action `approve`), **Edit** (reveals a textarea
+  prefilled with the draft markdown and submits action `edit`, treated as
+  approved by the stub), and **Reject** (requires a reason and submits action
+  `reject`). On approve/edit the panel shows the approved final readout; on
+  reject it shows the reason and no final output. A readout is never shown
+  without its decision controls at the gate.
+- On `HALTED` the panel shows the diagnostic (failed workstream + reason) and a
+  **Retry** button. On error the panel shows an inline message plus a **Retry**
+  button that re-runs with the SAME inputs.
 
 ## History
 
@@ -66,42 +84,43 @@ App location: `frontend/` (Vite + React + TypeScript, single route, one page).
 
 ## Contracts
 
-The stub services mirror the SAD section 8 endpoints. TypeScript types live in
-`frontend/src/types.ts`; the shapes below are the load-bearing payloads.
+These are the FROZEN contract types the backend MUST satisfy. They live in
+`frontend/src/types.ts` and mirror the SAD section 8 transport contract and the
+SAD section 6 shared-state projection. The backend contract is three endpoints:
+`POST /api/runs`, `GET /api/runs/{runId}` (poll), and
+`POST /api/runs/{runId}/decision`. A lightweight type-guard in
+`frontend/src/services/validateEnvelope.ts` enforces the envelope shape at the
+services boundary (no schema dependency added).
 
-`startRun` (stub for `POST /api/runs`):
+Server statuses are kept distinct from client-only run phases (the FSM below):
 
 ```ts
-interface RunInputs {
-  focus?: string;      // optional hint, does not change MVP results
-  forceError?: boolean; // dev/testing switch for the error path
-}
-interface StartRunResult {
-  runId: string;
-  status: "AWAITING_APPROVAL" | "APPROVED" | "REJECTED" | "HALTED";
-}
-startRun(inputs?: RunInputs): Promise<StartRunResult>;
+type RunStatus = "AWAITING_APPROVAL" | "APPROVED" | "REJECTED" | "HALTED";
 ```
 
-`getRunStatus` (stub for `GET /api/runs/{runId}`):
+`RunResponse` (from `POST /api/runs` and `GET /api/runs/{runId}`). When status is
+`HALTED`, `diagnostic` is present and `draft` is absent:
 
 ```ts
-interface GetRunStatusResult {
+interface RunResponse {
   runId: string;
-  status: RunStatus;             // "AWAITING_APPROVAL" at the HITL pause
-  readout?: ProgramReadout;      // present on success
-  diagnostic?: { failedWorkstream: string; reason: string }; // present on HALTED
-}
-getRunStatus(runId: string): Promise<GetRunStatusResult>;
-```
-
-`ProgramReadout` (view projection of the SAD section 6 shared state):
-
-```ts
-interface ProgramReadout {
-  runId: string;
-  timestamp: string;             // ISO
   status: RunStatus;
+  draft?: {
+    markdown: string;
+    summary: string;
+    bullets: string[];
+    status: "DRAFT" | "APPROVED" | "REJECTED";
+  };
+  stateSummary?: StateSummary;
+  diagnostic?: { failedWorkstream: string; reason: string };
+}
+```
+
+`StateSummary` (typed projection of the SAD section 6 shared state; field names
+unchanged from what the Results panel already renders):
+
+```ts
+interface StateSummary {
   priorities: {
     name: string;
     tasks: { name; owner; status; due; sourceRef }[];
@@ -118,18 +137,70 @@ interface ProgramReadout {
     desc; severity: "High" | "Medium" | "Low";
     owner; evidence: string[]; rank: number; gap: number;
   }[];
-  draft: { summary: string; bullets: string[]; status: "DRAFT" | "APPROVED" | "REJECTED" };
 }
 ```
 
-Finite-state machine (`frontend/src/state/runMachine.ts`):
+`DecisionRequest` / `DecisionResponse` (body and response of
+`POST /api/runs/{runId}/decision`):
+
+```ts
+interface DecisionRequest {
+  action: "approve" | "edit" | "reject";
+  edits?: string;
+  reason?: string;
+}
+interface DecisionResponse {
+  runId: string;
+  status: "APPROVED" | "REJECTED";
+  finalReadout?: { markdown: string };
+}
+```
+
+Error envelope (SAD section 8):
+
+```ts
+interface ErrorEnvelope { error: { code: string; message: string } }
+```
+
+Stub service signatures (`frontend/src/services/mockCrew.ts`, the temporary
+services layer to be swapped for `/api/runs` with the SAME types):
+
+```ts
+// startRun acknowledges a run (models POST /api/runs before the async pause).
+startRun(inputs?: RunInputs): Promise<{ runId: string; status: "running" }>;
+
+// getRunStatus polls GET /api/runs/{runId}. It reports { pending: true } for a
+// couple of polls (the running phase), then a validated RunResponse.
+getRunStatus(runId: string): Promise<
+  | { pending: true }
+  | { pending: false; response: RunResponse }
+>;
+
+// submitDecision posts a decision (stub for POST /api/runs/{runId}/decision).
+submitDecision(runId: string, request: DecisionRequest): Promise<DecisionResponse>;
+
+// focus and top_n are optional client hints only; forceError is a client-only
+// dev switch that drives the stub HALTED demo path and is NEVER in a live body.
+interface RunInputs { focus?: string; top_n?: number; forceError?: boolean }
+```
+
+Finite-state machine (`frontend/src/state/runMachine.ts`). `AWAITING_APPROVAL` is
+a first-class state and `HALTED` is handled; the approved (green) state is never
+entered while the draft is DRAFT / awaiting approval:
 
 ```
-States:  idle -> running -> done, plus error
-Events:  RUN     (idle | done | error -> running)
-         RESOLVE (running -> done)      // stub completes
-         FAIL    (running -> error)     // stub fails
-         RESET   (any -> idle, history preserved)
+States:  idle -> running -> awaiting_approval -> (approved | rejected)
+         running -> halted
+         any transport/client failure -> error
+Events:  RUN            (idle | approved | rejected | halted | error -> running)
+         POLL_AWAITING  (running -> awaiting_approval)   // poll returned the DRAFT
+         POLL_HALTED    (running -> halted)              // retry-then-halt path
+         DECIDE_APPROVE (marks the decision in flight)
+         APPROVED       (awaiting_approval -> approved)
+         DECIDE_REJECT  (marks the decision in flight)
+         REJECTED       (awaiting_approval -> rejected)
+         FAIL           (running | awaiting_approval -> error)
+         RESET          (any -> idle, history preserved)
 ```
 
 ## Spec Sync
@@ -137,19 +208,23 @@ Events:  RUN     (idle | done | error -> running)
 | Item | Status | Note |
 |---|---|---|
 | App scaffold (Vite + React + TS, single route) | Done | `frontend/`, one page in `App.tsx`. |
-| Inputs section | Done | Synthetic-dataset note, optional focus input, force-error toggle. |
-| Run control area | Done | Run + Reset only; no pause/cancel/retry-diff. |
-| Results panel | Done | Draft narrative, RAG rollup, capacity fit, ranked risks. |
-| History list | Done | Session-only; preserved across Reset. |
-| Status banner | Done | idle/running/done/error, colored pill, last-updated time, aria-live. |
-| FSM (reducer) | Done | idle -> running -> done + error; RUN/RESOLVE/FAIL/RESET. |
-| Stub services | Done | `startRun` + `getRunStatus`, fixed payload from synthetic fixtures. |
+| Frozen contract types | Done | `types.ts`: `RunResponse`, `StateSummary`, `DecisionRequest/Response`, `Diagnostic`, `ErrorEnvelope`; matches SAD section 8. |
+| Envelope validation | Done | `services/validateEnvelope.ts` type-guards enforce shape at the boundary; no schema dep. |
+| Inputs section | Done | Synthetic-dataset note, optional focus + top_n hints, force-halted dev toggle. |
+| Run control area | Done | Run + Reset only; HITL controls live on Results. |
+| Results panel | Done | Draft narrative, RAG rollup, capacity fit, ranked risks from `stateSummary` + `draft`. |
+| HITL decision controls | Done | Approve / Edit (textarea) / Reject (required reason), shown only at `AWAITING_APPROVAL`. |
+| History list | Done | Session-only; preserved across Reset; records approved/rejected/halted/error. |
+| Status banner | Done | "Run status:" idle/running/awaiting approval/approved/rejected/halted/error, colored pill, last-updated time, aria-live. |
+| FSM (reducer) | Done | `AWAITING_APPROVAL` first-class, `HALTED` handled; RUN/POLL_AWAITING/POLL_HALTED/DECIDE_*/APPROVED/REJECTED/FAIL/RESET. |
+| Poll loop | Done | `startRun` ack then poll `getRunStatus` until `AWAITING_APPROVAL` or `HALTED`; a couple of running polls first. |
+| Stub services | Done | `startRun` + `getRunStatus` + `submitDecision`; validated payloads from synthetic fixtures. |
 | Mock payload fidelity | Done | Values hand-computed from data/ CSVs per SAD section 7. |
-| HITL note (stubbed) | Done | "Awaiting human approval" note; no approval logic built. |
+| HALTED diagnostic path | Done | Rendered as a diagnostic (failed workstream + reason) with Retry. |
 | Error handling + Retry | Done | Inline error message; Retry re-runs same inputs. |
-| Force-error path | Done | Dev checkbox + `?forceError=1` query param. |
-| Accessibility basics | Done | Semantic headings, labeled controls, aria-live status. |
-| Happy-path test | Done | Vitest + RTL; one seeded example (see verification). |
+| Force-halted path | Done | Dev checkbox + `?forceError=1` query param; stub-only, never in a live body. |
+| Accessibility basics | Done | Semantic headings, labeled controls (incl. edit textarea + reason input), aria-live status. |
+| Tests | Done | Vitest + RTL: happy path (run -> poll -> awaiting -> approve -> approved) and HALTED path. |
 | gitignore (node_modules, dist) | Done | `frontend/.gitignore`. |
 
 ## Traceability notes (runtime constraints)
