@@ -93,12 +93,20 @@ def _run_narrative(state: StateSummary, inputs: Dict[str, Any]) -> Draft:
 
     # Map the LLM prose into the full frozen Draft. status is a backend
     # invariant (DRAFT until the HITL gate records a decision), not the model's.
-    return Draft(
+    draft = Draft(
         markdown=written.markdown,
         summary=written.summary,
         bullets=written.bullets,
         status="DRAFT",
     )
+
+    # Guardrail (SAD 7/9): reject a draft that cites figures or RAG labels not in
+    # the computed state. Raising here lets _with_retry retry once, then HALT, so
+    # a fabricated readout is never shown rather than approved.
+    from .grounding import verify_draft_grounding
+
+    verify_draft_grounding(draft, state)
+    return draft
 
 
 def run_readout(inputs: Optional[Dict[str, Any]] = None, run_id: Optional[str] = None) -> RunResponse:

@@ -31,6 +31,13 @@ HITL pause -> POST /api/runs/{runId}/decision -> APPROVED / REJECTED
   library-provided pause/resume. HITL is the HTTP request boundary plus the
   in-memory `RUNS` store keyed by `runId`. The CrewAI usage that stands is the
   YAML-first Narrative crew (sequential process, `output_pydantic`).
+- Grounding guardrail (`grounding.py`, Sprint-3 review hardening #4): after the
+  Narrative writes the Draft, `verify_draft_grounding()` checks that the domain
+  figures (integers >= 50, excluding year-like values) and RAG labels it used
+  actually appear in the computed `stateSummary`. If the model invents a number
+  or RAG value, the draft is rejected, which triggers the orchestrator's
+  retry-then-halt so a fabricated readout is never shown. Enforces "no invented
+  figures" beyond the prompt.
 
 ## 2. Deterministic rules (SAD section 7)
 
