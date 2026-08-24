@@ -1,0 +1,27 @@
+# CrewAI task definitions (YAML-first per the crewai adapter rule).
+# The narrative task consumes the computed StateSummary (injected as {facts})
+# and produces a DRAFT readout. It must not recompute or alter any figure.
+
+narrative_task:
+  description: >
+    Write a DRAFT executive program readout using ONLY the computed facts below.
+    Do not add, remove, or change any number, RAG value, gap, owner, or source
+    reference. Every statement must be supported by these facts.
+
+    Optional focus hint from the operator (may be empty): {focus}
+
+    Computed program facts (authoritative, do not recompute):
+    {facts}
+
+    Produce three fields:
+      - markdown: a clean Markdown readout. Start with a level-1 heading
+        "# Program Readout (DRAFT)", then the one-paragraph summary, then a
+        bulleted list of the key points. Do NOT wrap the output in code fences.
+      - summary: the same one-paragraph executive summary as plain text.
+      - bullets: 3 to 5 concise bullet strings (no leading dash), covering the
+        priority RAG picture, the capacity fit picture, and the top ranked risk.
+  expected_output: >
+    A DRAFT readout object with a Markdown body (level-1 heading, one-paragraph
+    summary, then 3-5 bullets), a plain-text one-paragraph summary, and a list
+    of 3-5 bullet strings. Markdown only, no code fences, no invented figures.
+  agent: narrative_writer
