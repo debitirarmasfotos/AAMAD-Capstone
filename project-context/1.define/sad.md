@@ -10,38 +10,62 @@ defines the runtime, the agents, how they coordinate, the data interface, and th
 shared state. It implements the requirements in `prd.md`.
 
 ### 2. Runtime decision
-**`AAMAD_TARGET_RUNTIME=claude-agent-sdk`** - chosen deliberately over the CrewAI default.
+**`AAMAD_TARGET_RUNTIME=crewai`** - selected for the Sprint-3 build track.
 
-Rationale: MCP connectors model the data sources cleanly; hooks and resumable sessions
-support a real approval gate; permissions and a governed agent loop fit the auditability
-requirement better than a purely declarative crew. The product should behave like a
-governed Claude agent (a supervisor over subagents), not a YAML role list.
+Decision: for the Sprint-3 build we target crewai. The orchestrator is a CrewAI Flow that
+runs the deterministic ingestion and analysis steps in Python (the Supervisor role), and a
+small Crew (a single LLM agent, optionally two) drafts the Narrative readout from the
+computed state. This keeps the arithmetic (RAG rollup, capacity fit, risk ranking) in
+deterministic code per the Reproducibility NFR (§7, §9) and confines the model to language
+generation.
 
-The five runtime-selection questions, answered on the record:
+Note (honest record): this REVERSES the earlier `claude-agent-sdk` decision. The §8 API
+contract (`/api/runs`, `GET /api/runs/{runId}`, `/api/runs/{runId}/decision`, JSON error
+envelope), the §6 shared-state shape, the §7 rules, and the HITL approve/edit/reject
+semantics are UNCHANGED - the backend satisfies the same frozen contract regardless of
+runtime. This runtime switch should be confirmed with the instructor, who had endorsed
+`claude-agent-sdk`.
+
+The five runtime-selection questions, answered for the crewai target:
 
 | Question | Answer |
 |---|---|
-| Language & deploy shape | Python or TS service; a governed agent worker, not a pure YAML crew |
-| Model strategy | Claude-deep (not multi-provider model shopping) |
-| Orchestration metaphor | Claude harness + hooks/subagents + a supervisor, not role-in-YAML crews |
-| Tooling | Heavy MCP + sessions + permissions, central to the HITL approval gate |
-| Learning vs differentiation | Adapter chosen for the architecture (HITL + auditability), not demo alignment |
+| Language & deploy shape | Python service; a CrewAI Flow + a small Crew behind a FastAPI app |
+| Model strategy | Single LLM for the Narrative only, low/zero temperature (analysis is code, not a model) |
+| Orchestration metaphor | Declarative Flow orchestrator over deterministic steps + one Narrative crew |
+| Tooling | Deterministic Python tools (`ProgramSource.fetch()`, `compute_program_state`); no MCP required for the MVP |
+| Learning vs differentiation | Aligns with the Sprint-3 build track; HITL + auditability preserved in the Flow |
 
 Set explicitly before Build:
 ```bash
-export AAMAD_TARGET_RUNTIME=claude-agent-sdk
+export AAMAD_TARGET_RUNTIME=crewai
 ```
 
-### 3. Application Crew (agents)
+**Superseded rationale (retained for audit):** the earlier decision was
+`AAMAD_TARGET_RUNTIME=claude-agent-sdk`, chosen over the CrewAI default on the grounds that
+MCP connectors model the data sources cleanly; hooks and resumable sessions support a real
+approval gate; and permissions plus a governed agent loop fit the auditability requirement
+better than a purely declarative crew, so the product would behave like a governed Claude
+agent (a supervisor over subagents) rather than a YAML role list. This rationale is
+superseded by the crewai decision above but retained for the audit trail; the HITL gate is
+now the HTTP pause of §8 rather than a runtime permission hook.
 
-| Agent | Responsibility | Inputs | Output | Prohibited |
-|---|---|---|---|---|
-| Supervisor / Orchestrator | Sequence the crew, hold shared state, enforce the HITL gate | all | final approved readout | fabricating data; publishing; skipping approval |
-| Ingestion agent | Load and normalize the source | source files (via interface) | normalized program state | rating/interpreting status |
-| Status Rollup agent | Derive per-priority RAG from child tasks | normalized state | RAG per priority + citing rows | touching financials |
-| Capacity/Burn agent | Compute run-rate and fit/no-fit | burn/capacity data | fit signal per workstream | rewriting task status |
-| Risk & Compliance agent | Flag and rank risks with evidence | state + capacity signal | ranked risks (desc, severity, evidence, owner) | inventing risks without source evidence |
-| Narrative agent | Synthesize the draft readout | all analysis outputs | DRAFT summary + bullets | introducing facts not in inputs |
+### 3. Application Crew (Flow + tools + Narrative crew)
+
+Per the determinism requirement (§7, §9), ingestion and analysis are DETERMINISTIC Python
+Flow steps / tools, not LLM agents. Only the Narrative is an LLM agent (risk descriptions
+are an optional LLM step; risk RANKING stays in code). Net: a Flow + at most two LLM agents,
+not five LLM specialists.
+
+| Element | Kind | Responsibility | Inputs | Output | Prohibited |
+|---|---|---|---|---|---|
+| Supervisor / Orchestrator | CrewAI Flow | Sequence the steps, hold shared state, enforce the HITL pause | all | final approved readout | fabricating data; publishing; skipping approval |
+| Ingestion | Deterministic tool/Flow step | Load and normalize the source | source files (via interface) | normalized program state | rating/interpreting status |
+| Status Rollup | Deterministic tool/Flow step | Derive per-priority RAG from child tasks (§7 rules) | normalized state | RAG per priority + citing rows | touching financials |
+| Capacity/Burn | Deterministic tool/Flow step | Compute run-rate and fit/no-fit (§7 rules) | burn/capacity data | fit signal per workstream | rewriting task status |
+| Risk ranking | Deterministic tool/Flow step | Rank risks by fixed total order (§7) | state + capacity signal | ranked risks (severity, evidence, owner, rank) | inventing risks without source evidence |
+| Narrative agent | LLM agent (Crew) | Synthesize the draft readout from computed state | all analysis outputs | DRAFT summary + bullets | introducing facts not in inputs |
+| Risk descriptions (optional) | LLM agent (Crew) | Phrase risk DESCRIPTIONS only | ranked risks | descriptive text per risk | changing rank/severity/evidence |
 
 ### 4. Coordination pattern
 Hybrid:
@@ -58,19 +82,27 @@ Ingestion ──────────┼─ Capacity/Burn ─┼──► Nar
 - **HITL:** a hard stop for human approve / edit / reject before output is marked final;
   the DRAFT is presented as a Markdown readout in the MVP chat interface (§8).
 
-**Runtime mapping (claude-agent-sdk):** the Supervisor is the coordinator (the main
-runtime agent); the five specialists are `AgentDefinition` entries in
-`ClaudeAgentOptions.agents`, invoked by the Supervisor via the `Agent` tool. Each
-specialist receives a least-privilege `allowed_tools` set: Ingestion gets read-only
-file/MCP access, the analysis and narrative agents get no write or publish tools. The
-HITL gate (§8) is enforced with a `PreToolUse`/permission hook, and lifecycle events are
-logged via `SubagentStart`/`SubagentStop` hooks.
+**Runtime mapping (crewai):** the Supervisor is a CrewAI Flow that runs DETERMINISTIC
+Python steps for ingestion and analysis: `ProgramSource.fetch()` (§5) loads the two CSVs,
+then a `compute_program_state` module/tool produces the RAG rollup, capacity fit, and risk
+ranking using the fixed rules in §7 (this is CODE, not an LLM). Only the Narrative is an
+LLM step: a small Crew with a single agent (`allow_delegation=false`, low/zero temperature)
+that drafts the readout from the computed state. Optionally a second agent phrases risk
+DESCRIPTIONS only; ranking stays in code. Net: a Flow + one (at most two) LLM agents, not
+five LLM specialists. The analysis steps return typed fragments and the Flow merges them
+into the single `programState` (§6), so there are no concurrent writers.
 
-**Failure handling (decided):** on a specialist failure the Supervisor performs exactly one
-idempotent retry of that specialist. If the retry also fails, the run HALTS and the
-Supervisor emits a Diagnostic identifying the failed workstream. The Supervisor does not
-synthesize a final DRAFT from partial data, so reproducibility, HITL integrity, and
-figure-to-source traceability are preserved (§9).
+HITL is the HTTP pause of §8, not a model permission prompt: the Flow pauses at
+`AWAITING_APPROVAL`, the human calls `POST /api/runs/{runId}/decision`, and the run resumes
+(approve/edit/reject). A FastAPI app exposes `POST /api/runs` (start),
+`GET /api/runs/{runId}` (poll), and `POST /api/runs/{runId}/decision` exactly as in §8.
+Run/Flow state is keyed by `runId`.
+
+**Failure handling (decided):** on a failed step the Flow performs exactly one idempotent
+retry of that step. If the retry also fails, the run HALTS and the Flow emits a Diagnostic
+identifying the failed workstream. The Flow does not synthesize a final DRAFT from partial
+data, so reproducibility, HITL integrity, and figure-to-source traceability are preserved
+(§9).
 
 ### 5. Ingestion interface (source-agnostic)
 Downstream agents never read a file format directly. Ingestion exposes a stable
@@ -123,7 +155,7 @@ approve / edit / reject decision (PRD AC-6.1). On edit, the human's revisions ar
 to the draft and captured in `draft.edits` before approval. On approve, state moves to
 APPROVED. On reject, the Supervisor records `draft.decisionReason` and nothing is marked
 final (PRD AC-6.2). No output is marked final until a decision is recorded. Implemented
-via a Claude Agent SDK hook / permission stop - the reason the runtime was chosen.
+as the CrewAI Flow pausing at `AWAITING_APPROVAL` and resuming on the decision call (§4).
 **Presentation surface (decided):** the DRAFT is rendered as a Markdown readout in the
 MVP chat interface, and the program manager responds approve / edit / reject inline. This
 is the only surface for the MVP; no additional UI is built. JSON or CLI variants are
@@ -145,9 +177,10 @@ projection of the shared-state `draft` object (§6), not a new schema.
   `reject` the `reason` is stored in `draft.decisionReason` (§6, §8).
 - `GET /api/runs/{runId}` - returns the current `{ runId, status, ... }` for polling the async
   pause.
-- **Session/resume mapping:** the HITL pause maps to a claude-agent-sdk resumable session keyed
-  by `runId`; the decision call resumes that session. The decision endpoint is idempotent -
-  re-sending the same action returns the current state and does not double-apply.
+- **Session/resume mapping:** the HITL pause maps to the CrewAI Flow pausing at
+  `AWAITING_APPROVAL`, with run/Flow state keyed by `runId` in the MVP in-memory run store;
+  the decision call resumes that Flow. The decision endpoint is idempotent - re-sending the
+  same action returns the current state and does not double-apply.
 - **Errors:** JSON error envelope `{ error: { code, message } }`; 4xx for invalid input, 5xx
   for runtime failure.
 - **Status mapping:** the API run `status` is a transport-level view over the shared-state
@@ -179,11 +212,11 @@ repo root for the component and contract detail.
   risk ranking). The rollup, capacity, and ranking computations are deterministic rule-based
   code (§7), not model-generated; the Narrative agent runs at low/zero temperature so the
   DRAFT is stable. Resolved model, temperature, and token controls are recorded in Audit per
-  the claude-agent-sdk adapter.
-- **Resilience:** a failing specialist does not corrupt shared state. The Supervisor
-  performs one idempotent retry of the failed specialist; if it still fails, the run HALTS
-  and emits a Diagnostic naming the failed workstream (§4). No final DRAFT is synthesized
-  from partial data, so a partial readout is never emitted as complete.
+  the crewai adapter.
+- **Resilience:** a failing step does not corrupt shared state. The Flow performs one
+  idempotent retry of the failed step; if it still fails, the run HALTS and emits a
+  Diagnostic naming the failed workstream (§4). No final DRAFT is synthesized from partial
+  data, so a partial readout is never emitted as complete.
 - **Observability:** log each agent's inputs/outputs and the approval decision (evals hook).
 
 ### 10. Out of scope (MVP)
@@ -191,13 +224,16 @@ Live production connectors, automatic distribution/publish of the readout, and
 multi-program portfolio rollup. All are post-MVP and fit behind the interfaces above.
 
 ### 11. MAS design mapping
-This design applies the multiagent-systems method deliberately: specialization
-boundaries -> 6 domain agents (§3); agent roles with responsibilities, tools/data, and
-prohibited actions (§3) plus success metrics (PRD §6); coordination pattern -> hybrid,
-parallel + sequential + hierarchical (§4); communication via structured messages over a
-shared state workspace (§6); supervisor-style architecture for a structured workflow with
-clear dependencies (§4); HITL on the high-risk final step (§8); and resilience with no
-single point of failure (§9). Evals/observability are scoped as production-phase work (§9).
+This is still a multi-agent system - orchestrated specialists - with the arithmetic kept in
+code per the determinism requirement (§7). It applies the multiagent-systems method
+deliberately: specialization boundaries -> a CrewAI Flow orchestrator (Supervisor) over
+deterministic ingestion/analysis tools plus a Narrative crew of one (at most two) LLM agents
+(§3, §4); roles with responsibilities, tools/data, and prohibited actions (§3) plus success
+metrics (PRD §6); coordination pattern -> a Flow sequencing deterministic steps then the
+Narrative crew, with the Flow owning shared state (§4); communication via typed fragments
+merged into a single shared-state workspace with no concurrent writers (§4, §6); HITL on the
+high-risk final step as an HTTP pause/resume (§8); and resilience via retry-then-halt with no
+partial DRAFT (§9). Evals/observability are scoped as production-phase work (§9).
 
 ## Sources
 - `prd.md` and `mrd.md` in this folder (requirements, user stories, opportunity).
@@ -206,16 +242,24 @@ single point of failure (§9). Evals/observability are scoped as production-phas
 
 ## Assumptions
 - The MVP reads the two synthetic CSVs in `data/`; a live connector replaces them later behind the same interface.
-- Claude Agent SDK hooks/permissions can implement the HITL stop as designed in §8.
+- A CrewAI Flow can implement the HITL pause/resume as designed in §8 (pause at AWAITING_APPROVAL, resume on the decision call).
+- The MVP run store is IN-MEMORY, keyed by `runId`, and is lost on process restart; durable persistence is deferred to post-MVP (§10).
 - The rollup and capacity rules in §7 are acceptable defaults, to be confirmed in Build.
 - The MVP burn fixture has no time dimension, so the PRD AC-3.1 "run-rate" is expressed as
   utilization (`used / capacity`); a time-based hours-per-period rate is post-MVP.
 
 ## Open Questions
-- Final RAG thresholds and how ties are broken when a priority has mixed child statuses.
+- Whether the qualitative "minor edits" acceptance measure (PRD DoD) is tracked
+  qualitatively or via an edit-count metric.
 - Which observability/eval framework to adopt in the production phase (§9).
+- Runtime switch to crewai to be confirmed with the instructor, who had endorsed
+  claude-agent-sdk (the §8 contract and HITL semantics are unchanged; §2).
 
 Resolved (retained for audit trail):
+- RAG thresholds / mixed-status tie-break: RESOLVED. §7 decides the rollup: any child
+  `At Risk` -> Red; else any `In Progress`/`Not Started` -> Amber; all `Complete` -> Green,
+  and risk ranking is a fixed total order with a stable tie-break key. The only qualitative
+  item still open is the "minor edits" acceptance measure (see Open Questions).
 - Supervisor retry-vs-fail: RESOLVED. On a specialist failure the Supervisor performs one
   idempotent retry, then HALTS with a Diagnostic and never synthesizes a DRAFT from partial
   data (§4, §9).
@@ -238,3 +282,4 @@ Resolved (retained for audit trail):
 - 2026-08-08, @system.arch, resolve-open-questions: folded three approved decisions into the SAD in place. Resolved runtime: claude-agent-sdk. (1) HITL DRAFT surface fixed to a Markdown readout in the MVP chat interface with inline approve / edit / reject (§8, §4 flow), MVP-lean with no extra UI. (2) Specialist-failure behavior fixed to one idempotent Supervisor retry then HALT with a Diagnostic naming the failed workstream, never synthesizing a DRAFT from partial data (§4 failure handling, §9 Resilience). (3) Config conflict closed by a local `aamad.config.yml` (runtime.target: claude-agent-sdk). Moved the three corresponding Open Questions to a Resolved list. No scope invented. No headings changed.
 - 2026-08-08, @system.arch, record-frontend-stack: recorded the frontend stack decision in §8 as React + TypeScript (Vite), superseding the earlier vanilla HTML/JS note. Operator-approved during the Build-phase frontend module. The React app implements the single "Generate Program Readout" workflow with an idle -> running -> done (+ error) FSM, status banner, and Run/Reset controls over stubbed services, to be wired to the real `/api/runs` contract in a later step. Resolved runtime unchanged: AAMAD_TARGET_RUNTIME=claude-agent-sdk. Wording/decision record only; no other headings changed.
 - 2026-08-08, @system.arch, correct-config-record: clarified the config-conflict resolution to reflect that `aamad.config.yml` is gitignored local state (not tracked), and that the tracked `aamad.config.example.yml` template was aligned to `runtime.target: claude-agent-sdk`. Runtime remains authoritative via AAMAD_TARGET_RUNTIME and the PRD/SAD. Wording only; no architecture or headings changed.
+- 2026-08-18, @system.arch, runtime-switch-and-review-fixes: resolved AAMAD_TARGET_RUNTIME=crewai for the Sprint-3 build track. Switched §2 from claude-agent-sdk to crewai (CrewAI Flow as the deterministic orchestrator + a small Narrative Crew), noting the switch REVERSES the earlier claude-agent-sdk decision, that the §8 API contract and HITL semantics are unchanged, and that it should be confirmed with the instructor; retained the prior rationale as superseded. Instructor fix #1: reclassified Ingestion, Status Rollup, Capacity/Burn, and risk ranking as DETERMINISTIC Flow steps/tools (ProgramSource.fetch() + compute_program_state per §7), leaving the Narrative as the one LLM agent (risk descriptions optional LLM) - net a Flow + at most two LLM agents, not five specialists; updated §3 table, §4 runtime mapping and failure handling, §9 wording, and §11 MAS mapping accordingly. Reframed the §8 HITL as the HTTP pause/resume on the Flow (endpoints, §6 state shape, and §7 rules kept INTACT). Instructor fix #5: moved the RAG-threshold Open Question to Resolved (decided in §7; only the qualitative "minor edits" measure stays open) and recorded the MVP run store as IN-MEMORY keyed by runId (lost on restart, persistence deferred) in Assumptions and §8. No headings changed; §6/§7/§8 contracts preserved.
