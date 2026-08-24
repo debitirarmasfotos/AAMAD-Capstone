@@ -1,0 +1,21 @@
+# PMO Program Intelligence Crew - backend (AAMAD_TARGET_RUNTIME=crewai)
+# Pinned for the Sprint-3 MVP build on Python 3.12.
+
+# CrewAI runtime. 0.86.0 is a known-good 0.8x line for this build.
+crewai==0.86.0
+
+# API layer.
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# Config, env, models.
+python-dotenv==1.0.1
+pydantic>=2.4,<3.0
+PyYAML>=6.0
+
+# crewai 0.86 imports pkg_resources at runtime; setuptools>=80 drops it on 3.12.
+setuptools<80
+
+# Tests (offline: deterministic compute + FastAPI TestClient; no paid LLM calls).
+pytest>=8.0
+httpx>=0.27
