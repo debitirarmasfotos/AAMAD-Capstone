@@ -1,4 +1,7 @@
 {
+  "env": {
+    "AAMAD_TARGET_RUNTIME": "crewai"
+  },
   "permissions": {
     "allow": [
       "Bash(python *)",
@@ -7,10 +10,11 @@
       "Bash(npm *)",
       "Bash(npx *)",
       "Read(**)",
-      "Edit(**)"
+      "Edit(**)",
+      "Bash(netstat -ano)",
+      "Bash(git --no-pager diff -- .github/workflows/ci.yml)",
+      "Bash(git --no-pager diff -- backend/src/app.py)",
+      "Bash(git --no-pager diff --stat)"
     ]
-  },
-  "env": {
-    "AAMAD_TARGET_RUNTIME": "crewai"
   }
 }

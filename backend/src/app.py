@@ -44,6 +44,14 @@ logger = logging.getLogger("pmo.api")
 
 app = FastAPI(title="PMO Program Intelligence Crew", version="0.1.0")
 
+
+# Simple in-memory metrics for observability (MVP)
+METRICS: dict = {
+    "total_requests": 0,
+    "total_runs_started": 0,
+    "run_status_counts": {"AWAITING_APPROVAL": 0, "APPROVED": 0, "REJECTED": 0, "HALTED": 0},
+}
+
 # CORS for the Vite dev frontend (wired next sprint).
 app.add_middleware(
     CORSMiddleware,
@@ -60,6 +68,21 @@ RUN_META: Dict[str, dict] = {}
 
 def _error(status: int, code: str, message: str) -> JSONResponse:
     return JSONResponse(status_code=status, content={"error": {"code": code, "message": message}})
+
+
+@app.middleware("http")
+async def _log_request_middleware(request: Request, call_next):
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration_ms = (time.perf_counter() - started) * 1000
+        logger.exception("HTTP %s %s failed (%.0fms)", request.method, request.url.path, duration_ms)
+        raise
+    duration_ms = (time.perf_counter() - started) * 1000
+    METRICS["total_requests"] = METRICS.get("total_requests", 0) + 1
+    logger.info("HTTP %s %s %s (%.0fms)", request.method, request.url.path, response.status_code, duration_ms)
+    return response
 
 
 @app.get("/health")
@@ -85,6 +108,9 @@ def start_run(payload: Optional[RunStartRequest] = None) -> JSONResponse:
         return _error(500, "internal_error", f"Unexpected run failure: {exc}")
 
     RUNS[run_id] = result
+    # Update simple metrics
+    METRICS["total_runs_started"] = METRICS.get("total_runs_started", 0) + 1
+    METRICS["run_status_counts"][result.status] = METRICS["run_status_counts"].get(result.status, 0) + 1
     logger.info(
         "run %s outcome=%s (%.0fms)", run_id, result.status, (time.perf_counter() - started) * 1000
     )
@@ -130,11 +156,27 @@ def decide(run_id: str, body: DecisionRequest) -> JSONResponse:
         run.status = "APPROVED"
         run.draft.status = "APPROVED"
 
+    # Update metrics: adjust counts for status transition
+    try:
+        # decrement old status count if present
+        METRICS["run_status_counts"]["AWAITING_APPROVAL"] = max(
+            0, METRICS["run_status_counts"].get("AWAITING_APPROVAL", 1) - 1
+        )
+    except Exception:
+        pass
+    METRICS["run_status_counts"][run.status] = METRICS["run_status_counts"].get(run.status, 0) + 1
+
     logger.info(
         "run %s decision=%s outcome=%s (%.0fms)",
         run_id, body.action, run.status, (time.perf_counter() - started) * 1000,
     )
     return _decision_response(run)
+
+
+@app.get("/metrics")
+def metrics() -> dict:
+    # Return a shallow copy of current in-memory metrics
+    return {"metrics": METRICS.copy(), "runs": len(RUNS)}
 
 
 def _decision_response(run: RunResponse) -> JSONResponse:
