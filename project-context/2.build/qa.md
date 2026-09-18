@@ -88,4 +88,4 @@ Confirmed checks:
 
 ## Audit
 
-- 2026-08-28, @qa.eng, qa, validated frontend tests and backend API tests and recorded the current known gaps for the MVP implementation.
+- 2026-08-28, @qa.eng, qa, validated frontend tests and backend API tests and recorded the current known gaps for the MVP implementation. Resolved AAMAD_TARGET_RUNTIME=crewai.

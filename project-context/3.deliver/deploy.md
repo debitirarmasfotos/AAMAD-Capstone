@@ -115,6 +115,10 @@ For the first release, monitor the following signals at a low operational cost:
 
 The optional CrewAI tracing switch should be treated as a diagnostic visibility aid rather than a required production control for the MVP. If enabled, it should be paired with the existing request log and `/metrics` output to correlate runtime behavior and LLM consumption without altering the request contract.
 
+### Production monitoring recommendations (from evals)
+
+The eval report ([project-context/2.build/evals.md](../2.build/evals.md) section 7) is the source for the production monitoring handoff. Beyond the MVP signals above, it recommends: request-level trace fields (model/version, input/output token counts, latency, stop reason, tool calls, `runId`, status transitions); dashboard metrics (cost per request, latency p50/p95, task success rate, error rate by type, approval/reject rate); and threshold alerts (cost spike over 150% of the 7-day average, latency p95 crossing the agreed SLA, and elevated missing-key or HALTED rates). The SLA and cost-cap thresholds are pending operator signoff (see evals EC-002 / EC-005).
+
 ## 6. Access control and operating model
 
 - Secrets remain environment variables only.

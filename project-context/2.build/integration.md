@@ -93,4 +93,4 @@ The integration is healthy for the MVP API contract, but it still depends on a v
 ## Audit
 
 - 2026-08-28, @integration.eng, integrate-api, added `VITE_API_BASE_URL` support and moved the frontend from the mock transport to the real FastAPI contract.
-- 2026-08-28, @integration.eng, integrate-api, verified the project-level UI/API contract with the frontend test suite and the backend API tests.
+- 2026-08-28, @integration.eng, integrate-api, verified the project-level UI/API contract with the frontend test suite and the backend API tests. Resolved AAMAD_TARGET_RUNTIME=crewai.
