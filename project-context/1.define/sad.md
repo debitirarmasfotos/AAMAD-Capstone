@@ -228,6 +228,16 @@ repo root for the component and contract detail.
   data, so a partial readout is never emitted as complete.
 - **Observability:** log each agent's inputs/outputs and the approval decision (evals hook).
 
+**Evaluation Criteria**
+
+| ID | Dimension | Metric | Threshold | Grading Method | Source |
+|----|-----------|--------|-----------|-----------------|--------|
+| EC-001 | Accuracy | Unsupported output figures in the final readout | 100% of every RAG status, capacity signal, and risk resolves to a source row; the narrative contains no unsupported claim | Code-based validation of `sourceRef` coverage plus deterministic output checks | PRD §4 AC-5.1, PRD §7 DoD, MRD §6 KPI |
+| EC-002 | Latency | End-to-end run time for one synthetic dataset | Single-run completion within one local execution session; exact SLA is pending operator signoff | Timing instrumentation and run-level logs | PRD §2 / MRD §6; operator answer required for final SLA |
+| EC-003 | Safety | External release or unapproved publication | 0 external publishes; synthetic data only; no production data leaves the local MVP environment | Static review and config validation | PRD NFR Safety, PRD §6 Scope |
+| EC-004 | Security | Secret exposure and unauthorized access | 0 secrets stored in artifacts; runtime credentials only via environment variables; no claim of production auth or enterprise controls in MVP | Security assessment + config review | PRD §5 Safety, SAD §8, `project-context/2.build/security.md` |
+| EC-005 | Cost | Runtime cost footprint for the MVP | No paid external services or production connectors in the MVP; arithmetic stays in deterministic code, and the model is confined to the draft narrative only | Code review and log review of tool/model usage | PRD §6 Out of Scope; operator answer required for a hard budget cap |
+
 ### 10. Out of scope (MVP)
 Live production connectors, automatic distribution/publish of the readout, and
 multi-program portfolio rollup. All are post-MVP and fit behind the interfaces above.
